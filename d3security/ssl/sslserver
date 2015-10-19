@@ -1,0 +1,122 @@
+* Copyright (C) Rocket Software, Inc. or its affiliates 1982-2013. All Rights Reserved.
+
+cfunction socket.builtin
+include dm,bp,includes sysid.inc
+include dm,bp,unix.h socket.h
+
+
+sslfd = 0
+prompt ""
+
+* Ask for IP version.
+print "Use IPv4 or IPv6 [4, 6]: " :
+input ipv
+if ( ipv = ""  !  ( ipv # 4  &  ipv # 6 ) ) then stop
+if ( ipv = 4 ) then addressFamily = AF$INET else addressFamily = AF$INET6
+
+* Ask for server port.
+print "Port: " :
+input serverPort
+if ( serverPort = "" ) then stop
+
+* Create a socket
+print "Creating socket."
+socketfd = %socket( addressFamily, SOCK$STREAM, 0 )
+if ( socketfd < 0 ) then
+   print "Failed to create socket, return = " : socketfd :
+   print ", system( 0 ) = " : system( 0 )
+   stop
+end
+
+* Bind the socket to a local port
+print "Binding."
+rtn = %bind( socketfd, addressFamily, INADDR$ANY, serverPort+0 )
+if ( rtn < 0 ) then
+   print "Failed to bind to port " : serverPort : " failed, return = " : rtn :
+   print ", system( 0 ) = " : system( 0 )
+   goto wrapup
+   stop
+end
+
+* Wait for an incoming connection
+print "Listening."
+rtn = %listen( socketfd, 1 )
+if ( rtn < 0 ) then
+   print "Failed to listen, return = " : rtn :
+   print ", system( 0 ) = " : system( 0 )
+   goto wrapup
+   stop
+end
+
+* Accept a connection
+print "Accepting SSL connection."
+clientPort = 0
+if ( ipv = 6 ) then
+   char clientAddress[ 46 ] ;* IPv6 requires a char array.
+   rtn = %accept_ssl( socketfd, clientAddress, &clientPort, "mvu2015-certificate.pem", "mvu2015-privatekey.pem", &sslfd )
+end else
+   clientAddress = 0 ;* IPv4 requires an integer.
+   rtn = %accept_ssl( socketfd, &clientAddress, &clientPort, "mvu2015-certificate.pem", "mvu2015-privatekey.pem", &sslfd )
+end
+if ( rtn < 0 ) then
+   print "Failed to accept SSL connection, return = " : sslfd :
+   print ", system( 0 ) = " : system( 0 )
+   goto wrapup
+   stop
+end
+
+* Use this new fd to communicate with the client.
+print "SSL connection accepted."
+if ( ipv = 4 ) then
+   clientAddress = dtx( clientAddress )
+   clientAddress = xtd( clientAddress[7, 2] ) : "." : xtd( clientAddress[5, 2] ) : "." : xtd( clientAddress[3, 2] ) : "." : xtd( clientAddress[1, 2] )
+end
+print "Client address = " : clientAddress
+print "Client port = " : clientPort
+
+Loop
+   * Read data from the socket
+   print "Reading from SSL connection."
+   char readBuffer[ 10000 ]
+   byteCount = %read_ssl( sslfd, readBuffer, 10000 )
+   if ( byteCount <= 0 ) then
+      if ( byteCount < 0 ) then
+         print "Failed to read SSL connection, return = " : byteCount :
+         print ", system( 0 ) = " : system( 0 )
+      end else
+         print "Connection has been closed gracefully."
+      end
+      goto wrapup
+   end
+   * Always extract only the number of bytes returned.
+   * The rest of the buffer may be garbage and not terminated.
+   print "From Client: " : readBuffer[ 1, byteCount ]
+
+   * Ask for data to send.
+   print "Enter some data to send (enter to quit): " :
+   input writeBuffer
+   if ( writeBuffer = "" ) then goto wrapup
+
+   * Write data to socket
+   print "Writing to SSL connection."
+   byteCount = %write_ssl( sslfd, writeBuffer, len( writeBuffer ) + 0 )
+   if ( byteCount < 0 ) then
+      print "Failed to write SSL connection, return = " : byteCount :
+      print ", system( 0 ) = " : system( 0 )
+      goto wrapup
+   end else
+      print byteCount : " bytes sent."
+   end
+Repeat
+
+* Close socket
+wrapup:
+print "Closing SSL listener."
+!rtn = %close_ssl( socketfd, sslfd ) ;! Do it this way on 10.2.
+rtn = %close_ssl( socketfd, &sslfd ) ;! Bug. Should be sslfd. Fixed in 10.2.
+if ( rtn < 0 ) then
+   print "Failed to close SSL connection, return = " : rtn :
+   print ", system( 0 ) = " : system( 0 )
+end
+
+end
