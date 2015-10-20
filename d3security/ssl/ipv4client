@@ -1,0 +1,76 @@
+* Copyright (C) Rocket Software, Inc. or its affiliates 1982-2013. All Rights Reserved.
+
+cfunction socket.builtin
+include dm,bp,includes sysid.inc
+include dm,bp,unix.h socket.h
+
+* Read host from TCL
+tclread buf
+hostname =field( buf, " ", 2 )
+if ( hostname = "" ) then
+   print "Specify server host/ip on command line."
+   stop
+end
+
+prompt ""
+print "Connect port: " :
+input cport
+
+* Create a socket
+print "Creating socket."
+socketfd = %socket( AF$INET, SOCK$STREAM, 0 ) ;* IPv4 uses AF$INET
+m = socketfd
+crt "socket, " : m
+if ( socketfd < 0 ) then
+   print "Failed to create socket, return = " : socketfd :
+   print ", system( 0 ) = " : system( 0 )
+   stop
+end
+
+* Connect to the socket
+print "Connecting."
+rtn = %connect( socketfd, AF$INET, hostname, cport+0 )
+crt "connect, " : rtn
+if ( rtn < 0 ) then
+   print "Failed to connect, return = " : rtn :
+   print ", system( 0 ) = " : system( 0 )
+   goto wrapup
+end
+
+* Write data to socket
+print "Send."
+bytecount = %send( socketfd, "Wow!", 4, 0 )
+if ( bytecount < 0 ) then
+   print "Failed to send, return = " : bytecount :
+   print ", system( 0 ) = " : system( 0 )
+end else
+   print bytecount : " bytes sent."
+end
+
+* Read data from the socket
+print "Recv."
+char buffer[ 10 ]
+bytecount = %recv( socketfd, buffer, 10, 0 )
+if ( bytecount <= 0 ) then
+   if ( bytecount < 0 ) then
+      print "Failed to recv, return = " : bytecount :
+      print ", system( 0 ) = " : system( 0 )
+   end else
+      print "Connection has been closed gracefully."
+   end
+   goto wrapup
+end
+* Always extract only the number of bytes returned.
+* The rest of the buffer may be garbage and not terminated.
+crt "From Server: " : buffer[ 1, bytecount ]
+
+* Close socket
+wrapup:
+print "Closing."
+rtn = %closesocket( socketfd )
+if ( rtn < 0 ) then
+   print "Failed to close socket fd, return = " : rtn :
+   print ", system( 0 ) = " : system( 0 )
+end
+
+end

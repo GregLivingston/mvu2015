@@ -1,0 +1,88 @@
+* Copyright (C) Rocket Software, Inc. or its affiliates 1982-2013. All Rights Reserved.
+
+cfunction socket.builtin
+include dm,bp,includes sysid.inc
+include dm,bp,unix.h socket.h
+
+sslfd = 0
+prompt ""
+
+* Ask for IP version.
+print "Use IPv4 or IPv6 [4, 6]: " :
+input ipv
+if ( ipv = ""  !  ( ipv # 4  &  ipv # 6 ) ) then stop
+if ( ipv = 4 ) then addressFamily = AF$INET else addressFamily = AF$INET6
+
+* Ask for server hostname or IP address.
+print "Hostname or IP address: " :
+input hostname
+if ( hostname = "" ) then stop
+
+* Ask for server port.
+print "Port: " :
+input port
+if ( port = "" ) then stop
+
+* Create a socket
+print "Creating socket."
+socketfd = %socket( addressFamily, SOCK$STREAM, 0 )
+if ( socketfd < 0 ) then
+   print "Failed to create socket, return = " : socketfd :
+   print ", system( 0 ) = " : system( 0 )
+   stop
+end
+
+* Connect to the server
+print "Connecting with SSL."
+rtn = %connect_ssl( socketfd, addressFamily, hostname, port+0, &sslfd )
+if ( rtn < 0 ) then
+   print "Failed to connect with SSL, return = " : rtn :
+   print ", system( 0 ) = " : system( 0 )
+   goto wrapup
+end
+
+Loop
+   * Ask for data to send.
+   print "Enter some data to send (enter to quit): " :
+   input writeBuffer
+   if ( writeBuffer = "" ) then goto wrapup
+
+   * Write data to socket
+   print "Writing to SSL connection."
+   byteCount = %write_ssl( sslfd, writeBuffer, len( writeBuffer ) + 0 )
+   if ( byteCount < 0 ) then
+      print "Failed to write to SSL connection, return = " : byteCount :
+      print ", system( 0 ) = " : system( 0 )
+   end else
+      print byteCount : " bytes sent."
+   end
+
+   * Read data from the socket
+   print "Reading from SSL connection."
+   char readBuffer[ 10000 ]
+   byteCount = %read_ssl( sslfd, readBuffer, 10000 )
+   if ( byteCount <= 0 ) then
+      if ( byteCount < 0 ) then
+         print "Failed to read from SSL connection, return = " : byteCount :
+         print ", system( 0 ) = " : system( 0 )
+      end else
+         print "Connection has been closed gracefully."
+      end
+      goto wrapup
+   end
+   * Always extract only the number of bytes returned.
+   * The rest of the buffer may be garbage and not terminated.
+   print "From Server: " : readBuffer[ 1, byteCount ]
+Repeat
+
+* Close socket
+wrapup:
+print "Closing SSL connection."
+!rtn = %close_ssl( socketfd, sslfd ) ;! Do it this way on 10.2.
+rtn = %close_ssl( socketfd, &sslfd ) ;! Bug. Should be sslfd. Fixed in 10.2.
+if ( rtn < 0 ) then
+   print "Failed to close SSL connection cleanly, return = " : rtn :
+   print ", system( 0 ) = " : system( 0 )
+end
+
+end

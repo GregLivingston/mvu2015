@@ -1,0 +1,99 @@
+* Copyright (C) Rocket Software, Inc. or its affiliates 1982-2013. All Rights Reserved.
+
+cfunction socket.builtin
+include dm,bp,includes sysid.inc
+include dm,bp,unix.h socket.h
+
+prompt ""
+print "Bind port: " :
+input bport
+
+* Create a socket
+print "Creating socket."
+socketfd = %socket( AF$INET, SOCK$STREAM, 0 ) ;* IPv4 uses AF$INET
+if ( socketfd < 0 ) then
+   print "Failed to create socket, return = " : socketfd :
+   print ", system( 0 ) = " : system( 0 )
+   stop
+end
+
+* Bind the socket to a local ethernet port
+print "Binding."
+rtn = %bind( socketfd, AF$INET, INADDR$ANY, bport+0 )
+if ( rtn < 0 ) then
+   print "Failed to bind to port " : bport : " failed, return = " : rtn :
+   print ", system( 0 ) = " : system( 0 )
+   goto wrapup2
+   stop
+end
+
+* Wait for an incoming connection
+print "Listening."
+rtn = %listen( socketfd, 1 )
+if ( rtn < 0 ) then
+   print "Failed to listen, return = " : rtn :
+   print ", system( 0 ) = " : system( 0 )
+   goto wrapup2
+   stop
+end
+
+* Accept a connection
+print "Accepting."
+clientport = 0
+clientaddress = 0 ;* IPv4 requires an integer.
+acceptfd = %accept( socketfd, &clientaddress, &clientport )
+* Use this new fd to communicate with the client.
+if ( acceptfd < 0 ) then
+   print "Failed to accept, return = " : acceptfd :
+   print ", system( 0 ) = " : system( 0 )
+   goto wrapup2
+   stop
+end
+
+print "Connection accepted, client address = " : clientaddress :
+print ", client port = " : clientport
+
+* Read data from the socket
+print "Recv."
+char buffer[ 24 ]
+bytecount = %recv( acceptfd, buffer, 24, 0 )
+if ( bytecount <= 0 ) then
+   if ( bytecount < 0 ) then
+      print "Failed to recv, return = " : bytecount :
+      print ", system( 0 ) = " : system( 0 )
+   end else
+      print "Connection has been closed gracefully."
+   end
+   goto wrapup
+end
+* Always extract only the number of bytes returned.
+* The rest of the buffer may be garbage and not terminated.
+print "From Client: " : buffer[ 1, bytecount ]
+
+* Write data to socket
+print "Send."
+bytecount = %send( acceptfd, "Sendy", 5, 0 )
+if ( bytecount < 0 ) then
+   print "Failed to send, return = " : bytecount :
+   print ", system( 0 ) = " : system( 0 )
+end else
+   print bytecount : " bytes sent."
+end
+
+* Close socket
+wrapup:
+print "Closing."
+rtn = %closesocket( acceptfd )
+if ( rtn < 0 ) then
+   print "Failed to close accept fd, return = " : rtn :
+   print ", system( 0 ) = " : system( 0 )
+end
+
+wrapup2:
+rtn = %closesocket( socketfd )
+if ( rtn < 0 ) then
+   print "Failed to close socket fd, return = " : rtn :
+   print ", system( 0 ) = " : system( 0 )
+end
+
+end
