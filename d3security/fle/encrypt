@@ -1,0 +1,72 @@
+Sub encrypt( item )
+************************************************************************************************
+* This subroutine encrypts a single attribute in the provided item. The item variable passed in
+* is overwritten with a modified version that has the selected attributes encrypted.
+*
+* Warnings:
+* Some things to consider when developing your encryption enabled application:
+* 1. The Crypto$P$ClearKey in this sample is hard-coded. Anyone that can see this subroutine can
+*    see the key. Be sure to protect the key by some means. For example, use a retrieval-lock to
+*    prevent the source from being viewed by unauthorized users, read the key from a secure
+*    file, etc.
+* 2. If there is an error, this sample subroutine returns without encrypting the data. Consider
+*    using a flag indicating whether or not this data is encrypted.
+* 3. The encryption algorithm is symmetric. If %Encrypt() is called with plain text, that text
+*    is encrypted. If it is called with encrypted text, that text is decrypted. Consider using
+*    a flag indicating whether or not the data is encrypted.
+************************************************************************************************
+
+Include dm,bp,includes crypto.inc
+
+
+* Main
+* ----
+Equ PhoneNumber To 3
+Equ Encrypted To 4
+
+If ( item< Encrypted > # 1 ) Then
+   string = item< PhoneNumber >
+   Gosub Crypto
+   If ( result = Crypto$Result$Success ) Then
+      item< PhoneNumber > = string
+      item< Encrypted > = 1
+   End
+End
+
+Return
+
+
+
+************************************************************************************************
+Crypto:
+************************************************************************************************
+* Input
+*  string: The string to encrypt.
+*
+* Output
+*  string: The encrypted string.
+************************************************************************************************
+* Prepare the %Encrypt() input
+* ----------------------------
+plainText = string
+plainTextLength = Len( plainText )
+encryptedTextBufferSize = 2 * plainTextLength
+Char encryptedText[ encryptedTextBufferSize ]
+cryptoParams = ""
+cryptoParams< Crypto$P$Algorithm > = Crypto$Algorithm$AES128
+cryptoParams< Crypto$P$inputlength > = plainTextLength
+cryptoParams< Crypto$P$outputLength > = encryptedTextBufferSize
+cryptoParams< Crypto$P$ClearKey > = "abcdefghijklmnop"
+encryptedTextLength = 0
+
+
+* Call %Encrypt(), check the result, and extract the encrypted text
+* -----------------------------------------------------------------
+result = %Encrypt( cryptoParams, plainText, encryptedText,  &encryptedTextLength )
+result = result[ 1, Len( result ) ] ;!!!!! @@@@@ Bug? result remains a number without this and none of the cases match.
+If ( result = Crypto$Result$Success ) Then string = encryptedText[ 1, encryptedTextLength ]
+
+Return
+* Crypto
+
+End
