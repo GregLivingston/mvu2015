@@ -1,0 +1,71 @@
+Sub decrypt( item )
+************************************************************************************************
+* This subroutine decrypts a single attribute in the provided item. The item variable passed in
+* is overwritten with a modified version that has the selected attributes decrypted.
+*
+* Warnings:
+* Some things to consider when developing your encryption enabled application:
+* 1. The Crypto$P$ClearKey in this sample is hard-coded. Anyone that can see this subroutine can
+*    see the key. Be sure to protect the key by some means. For example, use a retrieval-lock to
+*    prevent the source from being viewed by unauthorized users, read the key from a secure
+*    file, etc.
+* 2. If there is an error, this sample subroutine returns without decrypting the data. Consider
+*    using a flag indicating whether or not this data is decrypted.
+* 3. The decryption algorithm is symmetric. If %Decrypt() is called with encrypted text, that
+*    text is decrypted. If it is called with decrypted text, that text is encrypted. Consider
+*    using a flag indicating whether or not the data is encrypted.
+************************************************************************************************
+
+Include dm,bp,includes crypto.inc
+
+* Main
+* ----
+Equ PhoneNumber To 3
+Equ Encrypted To 4
+
+If ( item< Encrypted > = 1 ) Then
+   string = item< PhoneNumber >
+   Gosub Crypto
+   If ( result = Crypto$Result$Success ) Then
+      item< PhoneNumber > = string
+      item< Encrypted > = 0
+   End
+End
+
+Return
+
+
+
+************************************************************************************************
+Crypto:
+************************************************************************************************
+* Input
+*  string: The string to decrypt.
+*
+* Output
+*  string: The decrypted string.
+************************************************************************************************
+* Prepare the %Decrypt() input
+* ----------------------------
+encryptedText = string
+encryptedTextLength = Len( encryptedText )
+decryptedTextBufferSize = encryptedTextLength
+Char decryptedText[ decryptedTextBufferSize ]
+cryptoParams = ""
+cryptoParams< Crypto$P$Algorithm > = Crypto$Algorithm$AES128
+cryptoParams< Crypto$P$inputlength > = encryptedTextLength
+cryptoParams< Crypto$P$outputLength > = decryptedTextBufferSize
+cryptoParams< Crypto$P$ClearKey > = "abcdefghijklmnop"
+decryptedTextLength = 0
+
+
+* Call %Decrypt(), check the result, and extract the decrypted text
+* -----------------------------------------------------------------
+result = %Decrypt( cryptoParams, encryptedText, decryptedText, &decryptedTextLength )
+result = result[ 1, Len( result ) ] ;!!!!! @@@@@ Bug? result remains a number without this and none of the cases match.
+If ( result = Crypto$Result$Success ) Then string = decryptedText[ 1, decryptedTextLength ]
+
+Return
+* Crypto
+
+End
