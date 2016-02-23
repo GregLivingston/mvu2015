@@ -1,0 +1,64 @@
+Sub crypto( string, verbose )
+************************************************************************************************
+* This subroutine encrypts the given string. The string variable passed in is overwritten with
+* the encrypted string. If the verbose named common variable is not 0 and there is an error,
+* then a message is displayed.
+*
+* Warnings:
+* Some things to consider when developing your encryption enabled application:
+* 1. The Crypto$P$ClearKey in this sample is hard-coded. Anyone that can see this subroutine can
+*    see the key. Be sure to protect the key by some means. For example, use a retrieval-lock,
+*    read the key from a secure file, etc.
+* 2. If there is an error, this sample subroutine returns without encrypting the data. Consider
+*    using a flag indicating whether or not this data is encrypted.
+* 3. The encryption algorith is symmetric. If this subroutine is called with plain text, that
+*    text is encrypted. If it is called with encrypted text, that text is decrypted. Consider
+*    using a flag indicating whether or not this data is encrypted.
+************************************************************************************************
+
+Include dm,bp,includes crypto.inc
+
+plainText = string
+plainTextLength = Len( plainText )
+encryptedTextLength = 2 * plainTextLength
+Char encryptedText[ encryptedTextLength ]
+cryptoParams = ""
+cryptoParams< Crypto$P$Algorithm > = Crypto$Algorithm$AES128
+cryptoParams< Crypto$P$inputlength > = plainTextLength
+cryptoParams< Crypto$P$outputLength > = encryptedTextLength
+cryptoParams< Crypto$P$ClearKey > = "abcdefghijklmnop"
+encryptedTextLength = 0
+result = %Encrypt( cryptoParams, plainText, encryptedText,  &encryptedTextLength )
+result = result[ 1, Len( result ) ] ;!!!!! @@@@@ Bug? result remains a number without this and none of the cases match.
+If ( result # Crypto$Result$Success ) Then
+   If ( verbose # 0 ) Then Gosub ShowError
+   Return
+End
+string = encryptedText[ 1, encryptedTextLength ]
+
+
+Return
+
+
+************************************************************************************************
+ShowError:
+************************************************************************************************
+Crt "Encryption failed with error code = ," : result : ", '" :
+Begin Case
+   Case result = Crypto$Result$Failed
+      Crt "Unknown error type 1" :
+   Case result = Crypto$Result$InvalidKey
+      Crt "Invalid key length (must be 16 bytes)" :
+   Case result = Crypto$Result$OutputBufferTooSmall
+      Crt "Output buffer too small (must be at least twice the size of the input buffer)" :
+   Case result = Crypto$Result$NoEncryption
+      Crt "Encryption libraries are not loaded" :
+   Case 1
+      Crt "Unknown error type 2" :
+End Case
+Crt "'"
+
+Return
+* ShowError
+
+End
